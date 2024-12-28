@@ -37,6 +37,7 @@ import java.util.Map;
 
 import com.sun.jna.Pointer;
 import com.sun.jna.platform.win32.Tlhelp32.MODULEENTRY32W;
+import com.sun.jna.platform.win32.WinDef.DWORD;
 import com.sun.jna.platform.win32.WinNT.CACHE_RELATIONSHIP;
 import com.sun.jna.platform.win32.WinNT.GROUP_RELATIONSHIP;
 import com.sun.jna.platform.win32.WinNT.HANDLE;
@@ -159,6 +160,18 @@ public class Kernel32UtilTest extends TestCase {
         }
     }
 
+    public void testFormatMessageFromErrorCodeWithNonEnglishLocale() {
+        int errorCode = W32Errors.S_OK.intValue();
+        String formattedMsgInDefaultLocale = Kernel32Util.formatMessage(errorCode);
+        // primary and sub languages id's of the english locale, because it is present on most machines
+        String formattedMsgInEnglishLocale = Kernel32Util.formatMessage(errorCode, 9, 1);
+        if(AbstractWin32TestSupport.isEnglishLocale) {
+            assertEquals(formattedMsgInDefaultLocale, formattedMsgInEnglishLocale);
+        } else {
+            assertNotSame(formattedMsgInDefaultLocale, formattedMsgInEnglishLocale);
+        }
+    }
+
     public void testGetTempPath() {
         assertTrue(Kernel32Util.getTempPath().length() > 0);
     }
@@ -198,10 +211,10 @@ public class Kernel32UtilTest extends TestCase {
     public final void testGetPrivateProfileInt() throws IOException {
         final File tmp = File.createTempFile("testGetPrivateProfileInt", "ini");
         tmp.deleteOnExit();
-        final PrintWriter writer = new PrintWriter(new BufferedWriter(new FileWriter(tmp)));
-        writer.println("[Section]");
-        writer.println("existingKey = 123");
-        writer.close();
+        try (PrintWriter writer = new PrintWriter(new BufferedWriter(new FileWriter(tmp)))) {
+            writer.println("[Section]");
+            writer.println("existingKey = 123");
+        }
 
         assertEquals(123, Kernel32Util.getPrivateProfileInt("Section", "existingKey", 456, tmp.getCanonicalPath()));
         assertEquals(456, Kernel32Util.getPrivateProfileInt("Section", "missingKey", 456, tmp.getCanonicalPath()));
@@ -210,10 +223,10 @@ public class Kernel32UtilTest extends TestCase {
     public final void testGetPrivateProfileString() throws IOException {
         final File tmp = File.createTempFile("testGetPrivateProfileString", "ini");
         tmp.deleteOnExit();
-        final PrintWriter writer = new PrintWriter(new BufferedWriter(new FileWriter(tmp)));
-        writer.println("[Section]");
-        writer.println("existingKey = ABC");
-        writer.close();
+        try (PrintWriter writer = new PrintWriter(new BufferedWriter(new FileWriter(tmp)))) {
+            writer.println("[Section]");
+            writer.println("existingKey = ABC");
+        }
 
         assertEquals("ABC", Kernel32Util.getPrivateProfileString("Section", "existingKey", "DEF", tmp.getCanonicalPath()));
         assertEquals("DEF", Kernel32Util.getPrivateProfileString("Section", "missingKey", "DEF", tmp.getCanonicalPath()));
@@ -222,44 +235,38 @@ public class Kernel32UtilTest extends TestCase {
     public final void testWritePrivateProfileString() throws IOException {
         final File tmp = File.createTempFile("testWritePrivateProfileString", "ini");
         tmp.deleteOnExit();
-        final PrintWriter writer = new PrintWriter(new BufferedWriter(new FileWriter(tmp)));
-        writer.println("[Section]");
-        writer.println("existingKey = ABC");
-        writer.println("removedKey = JKL");
-        writer.close();
+        try (PrintWriter writer = new PrintWriter(new BufferedWriter(new FileWriter(tmp)))) {
+            writer.println("[Section]");
+            writer.println("existingKey = ABC");
+            writer.println("removedKey = JKL");
+        }
 
         Kernel32Util.writePrivateProfileString("Section", "existingKey", "DEF", tmp.getCanonicalPath());
         Kernel32Util.writePrivateProfileString("Section", "addedKey", "GHI", tmp.getCanonicalPath());
         Kernel32Util.writePrivateProfileString("Section", "removedKey", null, tmp.getCanonicalPath());
 
-        final BufferedReader reader = new BufferedReader(new FileReader(tmp));
-        assertEquals(reader.readLine(), "[Section]");
-        assertTrue(reader.readLine().matches("existingKey\\s*=\\s*DEF"));
-        assertTrue(reader.readLine().matches("addedKey\\s*=\\s*GHI"));
-        assertEquals(reader.readLine(), null);
-        reader.close();
+        try (BufferedReader reader = new BufferedReader(new FileReader(tmp))) {
+            assertEquals(reader.readLine(), "[Section]");
+            assertTrue(reader.readLine().matches("existingKey\\s*=\\s*DEF"));
+            assertTrue(reader.readLine().matches("addedKey\\s*=\\s*GHI"));
+            assertEquals(reader.readLine(), null);
+        }
     }
 
     public final void testGetPrivateProfileSection() throws IOException {
         final File tmp = File.createTempFile("testGetPrivateProfileSection", ".ini");
         tmp.deleteOnExit();
 
-        final PrintWriter writer0 = new PrintWriter(new BufferedWriter(new FileWriter(tmp)));
-        try {
+        try (PrintWriter writer0 = new PrintWriter(new BufferedWriter(new FileWriter(tmp)))) {
             writer0.println("[X]");
-        } finally {
-            writer0.close();
         }
 
         final String[] lines0 = Kernel32Util.getPrivateProfileSection("X", tmp.getCanonicalPath());
         assertEquals(lines0.length, 0);
 
-        final PrintWriter writer = new PrintWriter(new BufferedWriter(new FileWriter(tmp, true)));
-        try {
+        try (PrintWriter writer = new PrintWriter(new BufferedWriter(new FileWriter(tmp, true)))) {
             writer.println("A=1");
             writer.println("foo=bar");
-        } finally {
-            writer.close();
         }
 
         final String[] lines = Kernel32Util.getPrivateProfileSection("X", tmp.getCanonicalPath());
@@ -272,16 +279,13 @@ public class Kernel32UtilTest extends TestCase {
         final File tmp = File.createTempFile("testGetPrivateProfileSectionNames", "ini");
         tmp.deleteOnExit();
 
-        final PrintWriter writer = new PrintWriter(new BufferedWriter(new FileWriter(tmp)));
-        try {
+        try (PrintWriter writer = new PrintWriter(new BufferedWriter(new FileWriter(tmp)))) {
             writer.println("[S1]");
             writer.println("A=1");
             writer.println("B=X");
             writer.println("[S2]");
             writer.println("C=2");
             writer.println("D=Y");
-        } finally {
-            writer.close();
         }
 
         String[] sectionNames = Kernel32Util.getPrivateProfileSectionNames(tmp.getCanonicalPath());
@@ -294,30 +298,24 @@ public class Kernel32UtilTest extends TestCase {
         final File tmp = File.createTempFile("testWritePrivateProfileSecion", "ini");
         tmp.deleteOnExit();
 
-        final PrintWriter writer = new PrintWriter(new BufferedWriter(new FileWriter(tmp)));
-        try {
+        try (PrintWriter writer = new PrintWriter(new BufferedWriter(new FileWriter(tmp)))) {
             writer.println("[S1]");
             writer.println("A=1");
             writer.println("B=X");
             writer.println("[S2]");
             writer.println("C=2");
             writer.println("foo=bar");
-        } finally {
-            writer.close();
         }
 
         Kernel32Util.writePrivateProfileSection("S1", new String[] { "A=3", "E=Z" }, tmp.getCanonicalPath());
 
-        final BufferedReader reader = new BufferedReader(new FileReader(tmp));
-        try {
+        try (BufferedReader reader = new BufferedReader(new FileReader(tmp))) {
             assertEquals(reader.readLine(), "[S1]");
             assertEquals(reader.readLine(), "A=3");
             assertEquals(reader.readLine(), "E=Z");
             assertEquals(reader.readLine(), "[S2]");
             assertEquals(reader.readLine(), "C=2");
             assertEquals(reader.readLine(), "foo=bar");
-        } finally {
-            reader.close();
         }
     }
 
@@ -400,11 +398,11 @@ public class Kernel32UtilTest extends TestCase {
     public void testGetLogicalProcessorInformationEx() {
         SYSTEM_LOGICAL_PROCESSOR_INFORMATION_EX[] procInfo = Kernel32Util
                 .getLogicalProcessorInformationEx(WinNT.LOGICAL_PROCESSOR_RELATIONSHIP.RelationAll);
-        List<GROUP_RELATIONSHIP> groups = new ArrayList<GROUP_RELATIONSHIP>();
-        List<PROCESSOR_RELATIONSHIP> packages = new ArrayList<PROCESSOR_RELATIONSHIP>();
-        List<NUMA_NODE_RELATIONSHIP> numaNodes = new ArrayList<NUMA_NODE_RELATIONSHIP>();
-        List<CACHE_RELATIONSHIP> caches = new ArrayList<CACHE_RELATIONSHIP>();
-        List<PROCESSOR_RELATIONSHIP> cores = new ArrayList<PROCESSOR_RELATIONSHIP>();
+        List<GROUP_RELATIONSHIP> groups = new ArrayList<>();
+        List<PROCESSOR_RELATIONSHIP> packages = new ArrayList<>();
+        List<NUMA_NODE_RELATIONSHIP> numaNodes = new ArrayList<>();
+        List<CACHE_RELATIONSHIP> caches = new ArrayList<>();
+        List<PROCESSOR_RELATIONSHIP> cores = new ArrayList<>();
 
         for (int i = 0; i < procInfo.length; i++) {
             // Build list from relationship
@@ -500,5 +498,91 @@ public class Kernel32UtilTest extends TestCase {
                     || cache.type == PROCESSOR_CACHE_TYPE.CacheData || cache.type == PROCESSOR_CACHE_TYPE.CacheTrace);
             assertTrue(cache.associativity == WinNT.CACHE_FULLY_ASSOCIATIVE || cache.associativity > 0);
         }
+    }
+
+    public void testGetCurrentProcessPriority() {
+        assertTrue(Kernel32Util.isValidPriorityClass(Kernel32Util.getCurrentProcessPriority()));
+    }
+
+    public void testSetCurrentProcessPriority() {
+        Kernel32Util.setCurrentProcessPriority(Kernel32.HIGH_PRIORITY_CLASS);
+    }
+
+    public void testSetCurrentProcessBackgroundMode() {
+        try {
+            Kernel32Util.setCurrentProcessBackgroundMode(true);
+        } finally {
+            try {
+                Kernel32Util.setCurrentProcessBackgroundMode(false); // Reset the "background" mode!
+            } catch (Exception e) { }
+        }
+    }
+
+    public void testGetCurrentThreadPriority() {
+        assertTrue(Kernel32Util.isValidThreadPriority(Kernel32Util.getCurrentThreadPriority()));
+    }
+
+    public void testSetCurrentThreadPriority() {
+        Kernel32Util.setCurrentThreadPriority(Kernel32.THREAD_PRIORITY_ABOVE_NORMAL);
+    }
+
+    public void testSetCurrentThreadBackgroundMode() {
+        try {
+            Kernel32Util.setCurrentThreadBackgroundMode(true);
+        } finally {
+            try {
+                Kernel32Util.setCurrentThreadBackgroundMode(false); // Reset the "background" mode!
+            } catch (Exception e) { }
+        }
+    }
+
+    public void testGetProcessPriority() {
+        final int pid = Kernel32.INSTANCE.GetCurrentProcessId();
+        assertTrue(Kernel32Util.isValidPriorityClass(Kernel32Util.getProcessPriority(pid)));
+    }
+
+    public void testSetProcessPriority() {
+        final int pid = Kernel32.INSTANCE.GetCurrentProcessId();
+        Kernel32Util.setProcessPriority(pid, Kernel32.HIGH_PRIORITY_CLASS);
+    }
+
+    public void testGetThreadPriority() {
+        final int tid = Kernel32.INSTANCE.GetCurrentThreadId();
+        assertTrue(Kernel32Util.isValidThreadPriority(Kernel32Util.getThreadPriority(tid)));
+    }
+
+    public void testSetThreadPriority() {
+        final int tid = Kernel32.INSTANCE.GetCurrentThreadId();
+        Kernel32Util.setThreadPriority(tid, Kernel32.THREAD_PRIORITY_ABOVE_NORMAL);
+    }
+
+    public void testIsValidPriorityClass() {
+        assertTrue(Kernel32Util.isValidPriorityClass(Kernel32.NORMAL_PRIORITY_CLASS));
+        assertTrue(Kernel32Util.isValidPriorityClass(Kernel32.IDLE_PRIORITY_CLASS));
+        assertTrue(Kernel32Util.isValidPriorityClass(Kernel32.HIGH_PRIORITY_CLASS));
+        assertTrue(Kernel32Util.isValidPriorityClass(Kernel32.REALTIME_PRIORITY_CLASS));
+        assertTrue(Kernel32Util.isValidPriorityClass(Kernel32.BELOW_NORMAL_PRIORITY_CLASS));
+        assertTrue(Kernel32Util.isValidPriorityClass(Kernel32.ABOVE_NORMAL_PRIORITY_CLASS));
+        assertFalse(Kernel32Util.isValidPriorityClass(new DWORD(0L)));
+        assertFalse(Kernel32Util.isValidPriorityClass(new DWORD(1L)));
+        assertFalse(Kernel32Util.isValidPriorityClass(new DWORD(0xFFFFFFFF)));
+        assertFalse(Kernel32Util.isValidPriorityClass(Kernel32.PROCESS_MODE_BACKGROUND_BEGIN));
+        assertFalse(Kernel32Util.isValidPriorityClass(Kernel32.PROCESS_MODE_BACKGROUND_END));
+    }
+
+    public void testIsValidThreadPriority() {
+        assertTrue(Kernel32Util.isValidThreadPriority(Kernel32.THREAD_PRIORITY_IDLE));
+        assertTrue(Kernel32Util.isValidThreadPriority(Kernel32.THREAD_PRIORITY_LOWEST));
+        assertTrue(Kernel32Util.isValidThreadPriority(Kernel32.THREAD_PRIORITY_BELOW_NORMAL));
+        assertTrue(Kernel32Util.isValidThreadPriority(Kernel32.THREAD_PRIORITY_NORMAL));
+        assertTrue(Kernel32Util.isValidThreadPriority(Kernel32.THREAD_PRIORITY_ABOVE_NORMAL));
+        assertTrue(Kernel32Util.isValidThreadPriority(Kernel32.THREAD_PRIORITY_HIGHEST));
+        assertTrue(Kernel32Util.isValidThreadPriority(Kernel32.THREAD_PRIORITY_TIME_CRITICAL));
+        assertFalse(Kernel32Util.isValidThreadPriority(  3));
+        assertFalse(Kernel32Util.isValidThreadPriority( -3));
+        assertFalse(Kernel32Util.isValidThreadPriority( 16));
+        assertFalse(Kernel32Util.isValidThreadPriority(-16));
+        assertFalse(Kernel32Util.isValidThreadPriority(Kernel32.THREAD_MODE_BACKGROUND_BEGIN));
+        assertFalse(Kernel32Util.isValidThreadPriority(Kernel32.THREAD_MODE_BACKGROUND_END));
     }
 }

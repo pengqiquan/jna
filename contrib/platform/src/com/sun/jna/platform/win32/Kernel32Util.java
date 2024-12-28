@@ -179,13 +179,34 @@ public abstract class Kernel32Util implements WinDef {
     }
 
     /**
+     * Format a message from a code.
+     *
+     * @param code The error code
+     * @return Formatted message in the default locale.
+     */
+    public static String formatMessage(int code) {
+        return formatMessage(code, 0, 0);
+    }
+
+    /**
      * Format a message from the value obtained from
      * {@link Kernel32#GetLastError()} or {@link Native#getLastError()}.
      *
+     * <p>If you pass in zero, FormatMessage looks for a message for LANGIDs in the following order:</p>
+     * <ol>
+     *   <li>Language neutral</li>
+     *   <li>Thread LANGID, based on the thread's locale value</li>
+     *   <li>User default LANGID, based on the user's default locale value</li>
+     *   <li>System default LANGID, based on the system default locale value</li>
+     *   <li>US English</li>
+     * </ol>
+     *
      * @param code The error code
-     * @return Formatted message.
+     * @param primaryLangId The primary language identifier
+     * @param sublangId The sublanguage identifier
+     * @return Formatted message in the specified locale.
      */
-    public static String formatMessage(int code) {
+    public static String formatMessage(int code, int primaryLangId, int sublangId) {
         PointerByReference buffer = new PointerByReference();
         int nLen = Kernel32.INSTANCE.FormatMessage(
                 WinBase.FORMAT_MESSAGE_ALLOCATE_BUFFER
@@ -193,7 +214,7 @@ public abstract class Kernel32Util implements WinDef {
                 | WinBase.FORMAT_MESSAGE_IGNORE_INSERTS,
                 null,
                 code,
-                0, // TODO: // MAKELANGID(LANG_NEUTRAL,SUBLANG_DEFAULT)
+                WinNT.LocaleMacros.MAKELANGID(primaryLangId, sublangId),
                 buffer, 0, null);
         if (nLen == 0) {
             throw new LastErrorException(Native.getLastError());
@@ -213,10 +234,25 @@ public abstract class Kernel32Util implements WinDef {
      *
      * @param code
      *            HRESULT
-     * @return Formatted message.
+     * @return Formatted message in the default locale.
      */
     public static String formatMessage(HRESULT code) {
         return formatMessage(code.intValue());
+    }
+
+    /**
+     * Format a message from an HRESULT.
+     *
+     * @param code
+     *            HRESULT
+     * @param primaryLangId
+     *            The primary language identifier
+     * @param sublangId
+     *            The primary language identifier
+     * @return Formatted message in the specified locale.
+     */
+    public static String formatMessage(HRESULT code, int primaryLangId, int sublangId) {
+        return formatMessage(code.intValue(), primaryLangId, sublangId);
     }
 
     /**
@@ -224,19 +260,43 @@ public abstract class Kernel32Util implements WinDef {
      *
      * @param code
      *            Error code, typically a result of GetLastError.
-     * @return Formatted message.
+     * @return Formatted message in the default locale.
      */
     public static String formatMessageFromLastErrorCode(int code) {
         return formatMessage(W32Errors.HRESULT_FROM_WIN32(code));
     }
 
     /**
+     * Format a system message from an error code.
+     *
+     * @param code
+     *            Error code, typically a result of GetLastError.
+     * @param primaryLangId
+     *            The primary language identifier
+     * @param sublangId
+     *            The primary language identifier
+     * @return Formatted message in the specified locale.
+     */
+    public static String formatMessageFromLastErrorCode(int code, int primaryLangId, int sublangId) {
+        return formatMessage(W32Errors.HRESULT_FROM_WIN32(code), primaryLangId, sublangId);
+    }
+
+    /**
      * @return Obtains the human-readable error message text from the last error
-     *         that occurred by invocating {@code Kernel32.GetLastError()}.
+     *         that occurred by invocating {@code Kernel32.GetLastError()} in the default locale.
      */
     public static String getLastErrorMessage() {
         return Kernel32Util.formatMessageFromLastErrorCode(Kernel32.INSTANCE
                 .GetLastError());
+    }
+
+    /**
+     * @return Obtains the human-readable error message text from the last error
+     *         that occurred by invocating {@code Kernel32.GetLastError()} in the specified locale.
+     */
+    public static String getLastErrorMessage(int primaryLangId, int sublangId) {
+        return Kernel32Util.formatMessageFromLastErrorCode(Kernel32.INSTANCE
+                .GetLastError(), primaryLangId, sublangId);
     }
 
     /**
@@ -332,23 +392,10 @@ public abstract class Kernel32Util implements WinDef {
                 default:
                     return type;
             }
-        } catch(Win32Exception e) {
-            err = e;
-            throw err;  // re-throw so finally block executed
+        } catch(final Win32Exception e) {
+            throw err = e; // re-throw to avoid return value!
         } finally {
-            try {
-                closeHandle(hFile);
-            } catch(Win32Exception e) {
-                if (err == null) {
-                    err = e;
-                } else {
-                    err.addSuppressedReflected(e);
-                }
-            }
-
-            if (err != null) {
-                throw err;
-            }
+            cleanUp(hFile, err);
         }
     }
 
@@ -424,7 +471,7 @@ public abstract class Kernel32Util implements WinDef {
             return null;
         }
 
-        Map<String,String>  vars=new TreeMap<String,String>();
+        Map<String,String>  vars=new TreeMap<>();
         boolean             asWideChars=isWideCharEnvironmentStringBlock(lpszEnvironmentBlock, offset);
         long                stepFactor=asWideChars ? 2L : 1L;
         for (long    curOffset=offset; ; ) {
@@ -708,7 +755,7 @@ public abstract class Kernel32Util implements WinDef {
             }
         }
         // Array elements have variable size; iterate to populate array
-        List<SYSTEM_LOGICAL_PROCESSOR_INFORMATION_EX> procInfoList = new ArrayList<SYSTEM_LOGICAL_PROCESSOR_INFORMATION_EX>();
+        List<SYSTEM_LOGICAL_PROCESSOR_INFORMATION_EX> procInfoList = new ArrayList<>();
         int offset = 0;
         while (offset < bufferSize.getValue().intValue()) {
             SYSTEM_LOGICAL_PROCESSOR_INFORMATION_EX information = SYSTEM_LOGICAL_PROCESSOR_INFORMATION_EX
@@ -884,22 +931,10 @@ public abstract class Kernel32Util implements WinDef {
                 throw new Win32Exception(Kernel32.INSTANCE.GetLastError());
             }
             return QueryFullProcessImageName(hProcess, dwFlags);
-        } catch (Win32Exception e) {
-            we = e;
-            throw we; // re-throw to invoke finally block
+        } catch (final Win32Exception e) {
+            throw we = e; // re-throw to avoid return value!
         } finally {
-            try {
-                closeHandle(hProcess);
-            } catch (Win32Exception e) {
-                if (we == null) {
-                    we = e;
-                } else {
-                    we.addSuppressed(e);
-                }
-            }
-            if (we != null) {
-                throw we;
-            }
+            cleanUp(hProcess, we);
         }
     }
 
@@ -1033,8 +1068,8 @@ public abstract class Kernel32Util implements WinDef {
             throw new Win32Exception(Kernel32.INSTANCE.GetLastError());
         }
 
-        final List<String> types = new ArrayList<String>();
-        final Map<String, List<String>> result = new LinkedHashMap<String, List<String>>();
+        final List<String> types = new ArrayList<>();
+        final Map<String, List<String>> result = new LinkedHashMap<>();
 
         WinBase.EnumResTypeProc ertp = new WinBase.EnumResTypeProc() {
 
@@ -1145,7 +1180,7 @@ public abstract class Kernel32Util implements WinDef {
                 throw new Win32Exception(Kernel32.INSTANCE.GetLastError());
             }
 
-            List<Tlhelp32.MODULEENTRY32W> modules = new ArrayList<Tlhelp32.MODULEENTRY32W>();
+            List<Tlhelp32.MODULEENTRY32W> modules = new ArrayList<>();
             modules.add(first);
 
             Tlhelp32.MODULEENTRY32W next = new Tlhelp32.MODULEENTRY32W();
@@ -1163,23 +1198,10 @@ public abstract class Kernel32Util implements WinDef {
             }
 
             return modules;
-        } catch (Win32Exception e) {
-            we = e;
-            throw we;   // re-throw so finally block is executed
+        } catch (final Win32Exception e) {
+            throw we = e; // re-throw to avoid return value!
         } finally {
-            try {
-                closeHandle(snapshot);
-            } catch(Win32Exception e) {
-                if (we == null) {
-                    we = e;
-                } else {
-                    we.addSuppressedReflected(e);
-                }
-            }
-
-            if (we != null) {
-                throw we;
-            }
+            cleanUp(snapshot, we);
         }
     }
 
@@ -1233,6 +1255,255 @@ public abstract class Kernel32Util implements WinDef {
             return resultMemory.getWideString(0);
         } else {
             return resultMemory.getString(0);
+        }
+    }
+
+    /**
+     * Gets the priority class of the current process.
+     *
+     * @return The priority class of the current process.
+     * @throws Win32Exception if an error occurs.
+     */
+    public static DWORD getCurrentProcessPriority() {
+        final DWORD dwPriorityClass = Kernel32.INSTANCE.GetPriorityClass(Kernel32.INSTANCE.GetCurrentProcess());
+        if (!isValidPriorityClass(dwPriorityClass)) {
+            throw new Win32Exception(Kernel32.INSTANCE.GetLastError());
+        }
+        return dwPriorityClass;
+    }
+
+    /**
+     * Sets the priority class for the current process.
+     *
+     * @param dwPriorityClass The priority class for the process.
+     * @throws Win32Exception if an error occurs.
+     */
+    public static void setCurrentProcessPriority(final DWORD dwPriorityClass) {
+        if (!isValidPriorityClass(dwPriorityClass)) {
+            throw new IllegalArgumentException("The given priority value is invalid!");
+        }
+        if (!Kernel32.INSTANCE.SetPriorityClass(Kernel32.INSTANCE.GetCurrentProcess(), dwPriorityClass)) {
+            throw new Win32Exception(Kernel32.INSTANCE.GetLastError());
+        }
+    }
+
+    /**
+     * Enables or disables "background" processing mode for the current process
+     *
+     * @param enable If true, enables "background" processing mode, otherwise disables it.
+     * @throws Win32Exception if an error occurs.
+     */
+    public static void setCurrentProcessBackgroundMode(final boolean enable) {
+        // Note: PROCESS_MODE_BACKGROUN_{BEGIN,END} only works with the "current" process handle!
+        final DWORD dwPriorityClass = enable ? Kernel32.PROCESS_MODE_BACKGROUND_BEGIN : Kernel32.PROCESS_MODE_BACKGROUND_END;
+        if (!Kernel32.INSTANCE.SetPriorityClass(Kernel32.INSTANCE.GetCurrentProcess(), dwPriorityClass)) {
+            throw new Win32Exception(Kernel32.INSTANCE.GetLastError());
+        }
+    }
+
+    /**
+     * Gets the priority value of the current thread.
+     *
+     * @return The priority value of the current thread.
+     * @throws Win32Exception if an error occurs.
+     */
+    public static int getCurrentThreadPriority() {
+        final int nPriority = Kernel32.INSTANCE.GetThreadPriority(Kernel32.INSTANCE.GetCurrentThread());
+        if (!isValidThreadPriority(nPriority)) {
+            throw new Win32Exception(Kernel32.INSTANCE.GetLastError());
+        }
+        return nPriority;
+    }
+
+    /**
+     * Sets the priority value for the current thread.
+     *
+     * @param nPriority The priority value for the thread.
+     * @throws Win32Exception if an error occurs.
+     */
+    public static void setCurrentThreadPriority(final int nPriority) {
+        if (!isValidThreadPriority(nPriority)) {
+            throw new IllegalArgumentException("The given priority value is invalid!");
+        }
+        if (!Kernel32.INSTANCE.SetThreadPriority(Kernel32.INSTANCE.GetCurrentThread(), nPriority)) {
+            throw new Win32Exception(Kernel32.INSTANCE.GetLastError());
+        }
+    }
+
+    /**
+     * Enables or disables "background" processing mode for the current thread
+     *
+     * @param enable If true, enables "background" processing mode, otherwise disables it.
+     * @throws Win32Exception if an error occurs.
+     */
+    public static void setCurrentThreadBackgroundMode(final boolean enable) {
+        // Note: THREAD_MODE_BACKGROUND_{BEGIN,END} only works with the "current" thread handle!
+        final int nPriority = enable ? Kernel32.THREAD_MODE_BACKGROUND_BEGIN : Kernel32.THREAD_MODE_BACKGROUND_END;
+        if (!Kernel32.INSTANCE.SetThreadPriority(Kernel32.INSTANCE.GetCurrentThread(), nPriority)) {
+            throw new Win32Exception(Kernel32.INSTANCE.GetLastError());
+        }
+    }
+
+    /**
+     * Gets the priority class of the specified process.
+     *
+     * @param pid Identifier for the running process.
+     * @throws Win32Exception if an error occurs.
+     */
+    public static DWORD getProcessPriority(final int pid) {
+        final HANDLE hProcess = Kernel32.INSTANCE.OpenProcess(WinNT.PROCESS_QUERY_INFORMATION , false, pid);
+        if (hProcess == null) {
+            throw new Win32Exception(Kernel32.INSTANCE.GetLastError());
+        }
+
+        Win32Exception we = null;
+        try {
+            final DWORD dwPriorityClass = Kernel32.INSTANCE.GetPriorityClass(hProcess);
+            if (!isValidPriorityClass(dwPriorityClass)) {
+                throw new Win32Exception(Kernel32.INSTANCE.GetLastError());
+            }
+            return dwPriorityClass;
+        } catch (final Win32Exception e) {
+            throw we = e; // re-throw to avoid return value!
+        } finally {
+            cleanUp(hProcess, we);
+        }
+    }
+
+    /**
+     * Sets the priority class for the specified process.
+     *
+     * @param pid Identifier for the running process.
+     * @param dwPriorityClass The priority class for the process.
+     * @throws Win32Exception if an error occurs.
+     */
+    public static void setProcessPriority(final int pid, final DWORD dwPriorityClass) {
+        if (!isValidPriorityClass(dwPriorityClass)) {
+            throw new IllegalArgumentException("The given priority value is invalid!");
+        }
+
+        final HANDLE hProcess = Kernel32.INSTANCE.OpenProcess(WinNT.PROCESS_SET_INFORMATION, false, pid);
+        if (hProcess == null) {
+            throw new Win32Exception(Kernel32.INSTANCE.GetLastError());
+        }
+
+        Win32Exception we = null;
+        try {
+            if (!Kernel32.INSTANCE.SetPriorityClass(hProcess, dwPriorityClass)) {
+                throw new Win32Exception(Kernel32.INSTANCE.GetLastError());
+            }
+        } catch (final Win32Exception e) {
+            we = e;
+        } finally {
+            cleanUp(hProcess, we);
+        }
+    }
+
+    /**
+     * Gets the priority value of the specified thread.
+     *
+     * @param tid Identifier for the running thread.
+     * @throws Win32Exception if an error occurs.
+     */
+    public static int getThreadPriority(final int tid) {
+        final HANDLE hThread = Kernel32.INSTANCE.OpenThread(WinNT.THREAD_QUERY_INFORMATION, false, tid);
+        if (hThread == null) {
+            throw new Win32Exception(Kernel32.INSTANCE.GetLastError());
+        }
+
+        Win32Exception we = null;
+        try {
+            final int nPriority = Kernel32.INSTANCE.GetThreadPriority(hThread);
+            if (!isValidThreadPriority(nPriority)) {
+                throw new Win32Exception(Kernel32.INSTANCE.GetLastError());
+            }
+            return nPriority;
+        } catch (final Win32Exception e) {
+            throw we = e; // re-throw to avoid return value!
+        } finally {
+            cleanUp(hThread, we);
+        }
+    }
+
+    /**
+     * Sets the priority value for the specified thread.
+     *
+     * @param tid Identifier for the running thread.
+     * @param nPriority The priority value for the thread.
+     * @throws Win32Exception if an error occurs.
+     */
+    public static void setThreadPriority(final int tid, final int nPriority) {
+        if (!isValidThreadPriority(nPriority)) {
+            throw new IllegalArgumentException("The given priority value is invalid!");
+        }
+
+        final HANDLE hThread = Kernel32.INSTANCE.OpenThread(WinNT.THREAD_SET_INFORMATION, false, tid);
+        if (hThread == null) {
+            throw new Win32Exception(Kernel32.INSTANCE.GetLastError());
+        }
+
+        Win32Exception we = null;
+        try {
+            if (!Kernel32.INSTANCE.SetThreadPriority(hThread, nPriority)) {
+                throw new Win32Exception(Kernel32.INSTANCE.GetLastError());
+            }
+        } catch (final Win32Exception e) {
+            we = e;
+        } finally {
+            cleanUp(hThread, we);
+        }
+    }
+
+    /**
+     * Test whether the given priority class is valid.
+     * <p>Intentionally does not accept "background" processing mode flags!</p>
+     *
+     * @param dwPriorityClass The priority value to test.
+     * @return Returns true, if and only if the given priority value was valid
+     */
+    public static boolean isValidPriorityClass(final DWORD dwPriorityClass) {
+        return Kernel32.NORMAL_PRIORITY_CLASS.equals(dwPriorityClass) ||
+            Kernel32.IDLE_PRIORITY_CLASS.equals(dwPriorityClass) ||
+            Kernel32.HIGH_PRIORITY_CLASS.equals(dwPriorityClass) ||
+            Kernel32.REALTIME_PRIORITY_CLASS.equals(dwPriorityClass) ||
+            Kernel32.BELOW_NORMAL_PRIORITY_CLASS.equals(dwPriorityClass) ||
+            Kernel32.ABOVE_NORMAL_PRIORITY_CLASS.equals(dwPriorityClass);
+    }
+
+    /**
+     * Test whether the given thread priority is valid.
+     * <p>Intentionally does not accept "background" processing mode flags!</p>
+     *
+     * @param nPriority The priority value to test.
+     * @return Returns true, if and only if the given priority value was valid
+     */
+    public static boolean isValidThreadPriority(final int nPriority) {
+        switch(nPriority) {
+            case Kernel32.THREAD_PRIORITY_IDLE:
+            case Kernel32.THREAD_PRIORITY_LOWEST:
+            case Kernel32.THREAD_PRIORITY_BELOW_NORMAL:
+            case Kernel32.THREAD_PRIORITY_NORMAL:
+            case Kernel32.THREAD_PRIORITY_ABOVE_NORMAL:
+            case Kernel32.THREAD_PRIORITY_HIGHEST:
+            case Kernel32.THREAD_PRIORITY_TIME_CRITICAL:
+                return true;
+            default:
+                return false;
+        }
+    }
+
+    private static void cleanUp(final HANDLE h, Win32Exception we) {
+        try {
+            closeHandle(h);
+        } catch (final Win32Exception e) {
+            if (we == null) {
+                we = e;
+            } else {
+                we.addSuppressedReflected(e);
+            }
+        }
+        if (we != null) {
+            throw we;
         }
     }
 }

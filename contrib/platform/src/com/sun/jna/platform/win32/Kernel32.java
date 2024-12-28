@@ -69,6 +69,92 @@ public interface Kernel32 extends StdCallLibrary, WinNT, Wincon {
     int LOAD_LIBRARY_AS_DATAFILE = 0x2;
 
     /**
+     * Process priority classes
+     */
+    DWORD NORMAL_PRIORITY_CLASS         = new DWORD(0x00000020L);
+    DWORD IDLE_PRIORITY_CLASS           = new DWORD(0x00000040L);
+    DWORD HIGH_PRIORITY_CLASS           = new DWORD(0x00000080L);
+    DWORD REALTIME_PRIORITY_CLASS       = new DWORD(0x00000100L);
+    DWORD BELOW_NORMAL_PRIORITY_CLASS   = new DWORD(0x00004000L);
+    DWORD ABOVE_NORMAL_PRIORITY_CLASS   = new DWORD(0x00008000L);
+
+    /**
+     * Process mode flags
+     */
+    DWORD PROCESS_MODE_BACKGROUND_BEGIN = new DWORD(0x00100000L);
+    DWORD PROCESS_MODE_BACKGROUND_END   = new DWORD(0x00200000L);
+
+    /**
+     * Thread priorities
+     */
+    int THREAD_PRIORITY_IDLE          = -15;
+    int THREAD_PRIORITY_LOWEST        =  -2;
+    int THREAD_PRIORITY_BELOW_NORMAL  =  -1;
+    int THREAD_PRIORITY_NORMAL        =   0;
+    int THREAD_PRIORITY_ABOVE_NORMAL  =   1;
+    int THREAD_PRIORITY_HIGHEST       =   2;
+    int THREAD_PRIORITY_TIME_CRITICAL =  15;
+
+    /**
+     * Thread mode flags
+     */
+    int THREAD_MODE_BACKGROUND_BEGIN = 0x10000;
+    int THREAD_MODE_BACKGROUND_END   = 0x20000;
+
+    /**
+     * Thread priority error code
+     */
+    int THREAD_PRIORITY_ERROR_RETURN = 0x7FFFFFFF;
+
+    /**
+     * Processor Feature flags
+     */
+    int PF_FLOATING_POINT_PRECISION_ERRATA = 0;
+    int PF_FLOATING_POINT_EMULATED = 1;
+    int PF_COMPARE_EXCHANGE_DOUBLE = 2;
+    int PF_MMX_INSTRUCTIONS_AVAILABLE = 3;
+    int PF_PPC_MOVEMEM_64BIT_OK = 4;
+    int PF_ALPHA_BYTE_INSTRUCTIONS = 5;
+    int PF_XMMI_INSTRUCTIONS_AVAILABLE = 6;
+    int PF_3DNOW_INSTRUCTIONS_AVAILABLE = 7;
+    int PF_RDTSC_INSTRUCTION_AVAILABLE = 8;
+    int PF_PAE_ENABLED = 9;
+    int PF_XMMI64_INSTRUCTIONS_AVAILABLE = 10;
+    int PF_SSE_DAZ_MODE_AVAILABLE = 11;
+    int PF_NX_ENABLED = 12;
+    int PF_SSE3_INSTRUCTIONS_AVAILABLE = 13;
+    int PF_COMPARE_EXCHANGE128 = 14;
+    int PF_COMPARE64_EXCHANGE128 = 15;
+    int PF_CHANNELS_ENABLED = 16;
+    int PF_XSAVE_ENABLED = 17;
+    int PF_ARM_VFP_32_REGISTERS_AVAILABLE = 18;
+    int PF_ARM_NEON_INSTRUCTIONS_AVAILABLE = 19;
+    int PF_SECOND_LEVEL_ADDRESS_TRANSLATION = 20;
+    int PF_VIRT_FIRMWARE_ENABLED = 21;
+    int PF_RDWRFSGSBASE_AVAILABLE = 22;
+    int PF_FASTFAIL_AVAILABLE = 23;
+    int PF_ARM_DIVIDE_INSTRUCTION_AVAILABLE = 24;
+    int PF_ARM_64BIT_LOADSTORE_ATOMIC = 25;
+    int PF_ARM_EXTERNAL_CACHE_AVAILABLE = 26;
+    int PF_ARM_FMAC_INSTRUCTIONS_AVAILABLE = 27;
+    int PF_RDRAND_INSTRUCTION_AVAILABLE = 28;
+    int PF_ARM_V8_INSTRUCTIONS_AVAILABLE = 29;
+    int PF_ARM_V8_CRYPTO_INSTRUCTIONS_AVAILABLE = 30;
+    int PF_ARM_V8_CRC32_INSTRUCTIONS_AVAILABLE = 31;
+    int PF_RDTSCP_INSTRUCTION_AVAILABLE = 32;
+    int PF_RDPID_INSTRUCTION_AVAILABLE = 33;
+    int PF_ARM_V81_ATOMIC_INSTRUCTIONS_AVAILABLE = 34;
+    int PF_SSSE3_INSTRUCTIONS_AVAILABLE = 36;
+    int PF_SSE4_1_INSTRUCTIONS_AVAILABLE = 37;
+    int PF_SSE4_2_INSTRUCTIONS_AVAILABLE = 38;
+    int PF_AVX_INSTRUCTIONS_AVAILABLE = 39;
+    int PF_AVX2_INSTRUCTIONS_AVAILABLE = 40;
+    int PF_AVX512F_INSTRUCTIONS_AVAILABLE = 41;
+    int PF_ARM_V82_DP_INSTRUCTIONS_AVAILABLE = 43;
+    int PF_ARM_V83_JSCVT_INSTRUCTIONS_AVAILABLE = 44;
+    int PF_ARM_V83_LRCPC_INSTRUCTIONS_AVAILABLE = 45;
+
+    /**
      * Reads data from the specified file or input/output (I/O) device. Reads
      * occur at the position specified by the file pointer if supported by the
      * device.
@@ -4153,6 +4239,45 @@ public interface Kernel32 extends StdCallLibrary, WinNT, Wincon {
     boolean GetExitCodeThread(HANDLE hThread, IntByReference exitCode);
 
     /**
+     * Gets the priority class of the specified process.
+     *
+     * @param hProcess A handle to the process.
+     * @return If the function succeeds, the return value is the priority class of
+     *                  the specified process.
+     * <p>If the function fails, the return value is zero.</p>
+     */
+    DWORD GetPriorityClass(HANDLE hProcess);
+
+    /**
+     * Sets the priority class for the specified process.
+     *
+     * @param hProcess A handle to the process.
+     * @param dwPriorityClass The priority class for the process.
+     * @return If the function succeeds, the return value is nonzero.
+     */
+    boolean SetPriorityClass(HANDLE hProcess, DWORD dwPriorityClass);
+
+    /**
+     * Gets the priority value of the specified thread.
+     *
+     * @param hProcess A handle to the process.
+     * @return If the function succeeds, the return value is the priority class of
+     *                  the specified thread.
+     * <p>If the function fails, the return value is
+     *                  THREAD_PRIORITY_ERROR_RETURN.</p>
+     */
+    int GetThreadPriority(HANDLE hProcess);
+
+    /**
+     * Sets the priority value for the specified thread.
+     *
+     * @param hThread A handle to the thread whose priority value is to be set.
+     * @param nPriority The priority value for the thread.
+     * @return If the function succeeds, the return value is nonzero.
+     */
+    boolean SetThreadPriority(HANDLE hThread, int nPriority);
+
+    /**
      * Releases, decommits, or releases and decommits a region of memory within
      * the virtual address space of a specified process.
      *
@@ -4387,4 +4512,14 @@ public interface Kernel32 extends StdCallLibrary, WinNT, Wincon {
      * </p>
      */
     boolean VirtualUnlock(Pointer lpAddress, SIZE_T dwSize);
+
+    /**
+     * Determines whether the specified processor feature is supported by the current computer.
+     *
+     * @param ProcessorFeature The processor feature to be tested.
+     * @return If the feature is supported, the return value is true. If the feature is not supported, the return value
+     *         is false. If the HAL does not support detection of the feature, whether or not the hardware supports the
+     *         feature, the return value is also false.
+     */
+    boolean IsProcessorFeaturePresent(int ProcessorFeature);
 }

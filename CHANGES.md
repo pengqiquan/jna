@@ -2,17 +2,94 @@ NOTE: as of JNA 4.0, JNA is now dual-licensed under LGPL and AL 2.0 (see LICENSE
 
 NOTE: JNI native support is typically incompatible between minor versions, and almost always incompatible between major versions.
 
-Next Release (5.13.0)
+Next Release (5.17.0)
 =====================
+
+Features
+--------
+
+Bug Fixes
+---------
+
+
+Release 5.16.0
+==============
+
+Features
+--------
+* [#1626](https://github.com/java-native-access/jna/pull/1626): Add caching of field list and field validation in `Structure` along with more efficient reentrant read-write locking instead of synchronized() blocks - [@BrettWooldridge](https://github.com/brettwooldridge)
+
+Bug Fixes
+---------
+* [#1618](https://github.com/java-native-access/jna/issues/1618): Fix calls to jnidispatch on Android with 16KB page size - [@Thomyrock](https://github.com/Thomyrock)
+
+Release 5.15.0
+==============
+
+Features
+--------
+* [#1578](https://github.com/java-native-access/jna/pull/1578): Add support for FreeBSD aarch64 - [@alexdupre](https://github.com/alexdupre).
+* [#1593](https://github.com/java-native-access/jna/pull/1593): Add support for DragonFly BSD x86-64 - [@liweitianux](https://github.com/liweitianux).
+* [#1595](https://github.com/java-native-access/jna/pull/1595): Add `IsProcessorFeaturePresent` to `c.s.j.p.win32.Kernel32` - [@dbwiddis](https://github.com/dbwiddis).
+* [#1602](https://github.com/java-native-access/jna/pull/1602): Add `XMoveWindow`, `XResizeWindow`, `XMoveResizeWindow`, `XRaiseWindow`, `XLowerWindow` X11 calls to `c.s.j.p.unix.X11` - [@vinceh121](https://github.com/vinceh121).
+* [#1613](https://github.com/java-native-access/jna/issues/1613): Added static helper method `Native#getNativeLibrary' for getting the underlying NativeLibrary instance from a Library interface instance or from a "registered" class - [@matthiasblaesing](https://github.com/matthiasblaesing).
+* [#1624](https://github.com/java-native-access/jna/pull/1624): Enable linker build-id for android builds - [@mstyura](https://github.com/mstyura).
+
+Bug Fixes
+---------
+* [#1579](https://github.com/java-native-access/jna/issues/1579): Fix analysis of ELF binary on arm systems running with a java ELF binary without section table headers (java8 on armv7 NAS) - [@matthiasblaesing](https://github.com/matthiasblaesing).
+* [#1586](https://github.com/java-native-access/jna/issues/1586): Fix free_callback JNI weak reference leak - [@xiezhaokun](https://github.com/xiezhaokun).
+* [6486c90d913a413f247eef84742ce3c474738933](https://github.com/java-native-access/jna/commit/6486c90d913a413f247eef84742ce3c474738933): Check CallbackReference#cbstruct for null when checking existing Reference - [@matthiasblaesing](https://github.com/matthiasblaesing).
+* [#1622](https://github.com/java-native-access/jna/issues/1622): Add "linux-riscv64" entry to OSGI Bundle-NativeCode header in MANIFEST.MF  - [@matthiasblaesing](https://github.com/matthiasblaesing).
+
+Release 5.14.0
+==============
+
+Features
+--------
+* [#1556](https://github.com/java-native-access/jna/pull/1556): Add `SetJob`, `SetPrinter` to `c.s.j.p.w.Winspool` - [@tresf](https://github.com/tresf).
+* [#1534](https://github.com/java-native-access/jna/pull/1534): Add `GetMethod`, `Put`, `SpawnInstance` to `c.s.j.p.win32.COM.WbemCli#IWbemClassObject` and `ExecMethod` to `c.s.j.p.win32.COM.WbemCli#IWbemServices` - [@faddom](https://github.com/faddom).
+* [#1544](https://github.com/java-native-access/jna/pull/1544): Add `GetPriorityClass`, `SetPriorityClass`, `GetThreadPriority`, `SetThreadPriority` and associated constants to `c.s.j.p.win32.Kernel32` - [@dEajL3kA](https://github.com/dEajL3kA).
+* [#1548](https://github.com/java-native-access/jna/pull/1548): Make interface `c.s.j.p.mac.XAttr public` - [@matthiasblaesing](https://github.com/matthiasblaesing).
+* [#1551](https://github.com/java-native-access/jna/pull/1551): Add `c.s.j.p.bsd.ExtAttr` and `c.s.j.p.bsd.ExtAttrUtil` to wrap BSD [<sys/extattr.h>](https://man.freebsd.org/cgi/man.cgi?query=extattr&sektion=2) system calls. [@rednoah](https://github.com/rednoah).
+* [#1517](https://github.com/java-native-access/jna/pull/1517): Add missing `O_*` (e.g. `O_APPEND`, `O_SYNC`, `O_DIRECT`, ...) to `c.s.j.p.linux.Fcntl` - [@matthiasblaesing](https://github.com/matthiasblaesing).
+* [#1521](https://github.com/java-native-access/jna/issues/1521): Shutdown CleanerThread once the last cleanable is removed - [@matthiasblaesing](https://github.com/matthiasblaesing).
+* [#1557](https://github.com/java-native-access/jna/issues/1557): Build linux-riscv64 on Ubuntu focal to improve compatibility with older glibc versions - [@matthiasblaesing](https://github.com/matthiasblaesing).
+
+Bug Fixes
+---------
+* [#1501](https://github.com/java-native-access/jna/pull/1501): `Library.OPTION_STRING_ENCODING` is ignore for string arguments function calls - [@matthiasblaesing](https://github.com/matthiasblaesing).
+* [#1504](https://github.com/java-native-access/jna/pull/1504): Increase maximum supported fixed args on varargs calls from 3 to 255 - [@andrew-nowak](https://github.com/andrew-nowak).
+* [#1545](https://github.com/java-native-access/jna/pull/1545): Fix Java 6 incompatibility in `c.s.j.p.win32.Kerne32Util` and `c.s.j.p.win32.DBT` - [@matthiasblaesing](https://github.com/matthiasblaesing).
+
+Important Changes
+-----------------
+* The interfaces between Java and native code have changed, so `libjnidispatch`
+  must be rebuilt to be compatible with this release.
+* Release drops support for JDKs 6 + 7, so you'll need at least JDK 8 to
+  update to use this version.
+
+Release 5.13.0
+==============
 
 Features
 --------
 * [#1454](https://github.com/java-native-access/jna/pull/1454): Add `c.s.j.p.win32.Psapi.QueryWorkingSetEx` and associated Types - [@crain-32](https://github.com/Crain-32).
 * [#1459](https://github.com/java-native-access/jna/pull/1459): Add `VirtualLock` and `VirtualUnlock` in `c.s.j.p.win32.Kernel32` - [@matthiasblaesing](https://github.com/matthiasblaesing).
+* [#1471](https://github.com/java-native-access/jna/pull/1471): Add `c.s.j.p.win32.Advapi32Util#isCurrentProcessElevated` and associated Types - [@dbwiddis](https://github.com/dbwiddis).
+* [#1474](https://github.com/java-native-access/jna/pull/1474): Add `c.s.j.p.win32.WbemCli#IWbemClassObject.IWbemQualifierSet`, `IWbemServices.GetObject`, `IWbemContext.SetValue` and associated methods - [@rchateauneu](https://github.com/rchateauneu).
+* [#1482](https://github.com/java-native-access/jna/pull/1482): Add multilingual support of `Kernel32Util.formatMessage` - [@overpathz](https://github.com/overpathz).
+* [#1490](https://github.com/java-native-access/jna/pull/1490): Adds support for a custom `SymbolProvider` in `NativeLibrary` & `Library` - [@soywiz](https://github.com/soywiz).
+* [#1491](https://github.com/java-native-access/jna/pull/1491): Update libffi to v3.4.4  - [@matthiasblaesing](https://github.com/matthiasblaesing).
+* [#1487](https://github.com/java-native-access/jna/issues/1487): Add 'uses' information to OSGI metadata in MANIFEST.MF to improve stability of package resolution - [@sratz](https://github.com/sratz).
 
 Bug Fixes
 ---------
 * [#1452](https://github.com/java-native-access/jna/issues/1452): Fix memory allocation/handling for error message generation in native library code (`dispatch.c`) - [@matthiasblaesing](https://github.com/matthiasblaesing).
+* [#1460](https://github.com/java-native-access/jna/issues/1460): Fix win32 variant date conversion in DST offest window and with millisecond values - [@eranl](https://github.com/eranl).
+* [#1472](https://github.com/java-native-access/jna/issues/1472): Fix incorrect bitmask in `c.s.j.Pointer#createConstant(int)` - [@dbwiddis](https://github.com/dbwiddis).
+* [#1481](https://github.com/java-native-access/jna/issues/1481): Fix NPE in NativeLibrary when unpacking from classpath is disabled - [@trespasserw](https://github.com/trespasserw).
+* [#1489](https://github.com/java-native-access/jna/pull/1489): Fixes typo in `OpenGL32Util#wglGetProcAddress`, instead of parameter `procName` the hardcoded value `wglEnumGpusNV` was used - [@soywiz](https://github.com/soywiz).
 
 Release 5.12.1
 ==============

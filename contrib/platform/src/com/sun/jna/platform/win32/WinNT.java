@@ -3208,7 +3208,7 @@ public interface WinNT extends WinError, WinDef, WinBase, BaseTSD {
          */
         @Override
         protected List<Field> getFieldList() {
-            List<Field> fields = new ArrayList<Field>(super.getFieldList());
+            List<Field> fields = new ArrayList<>(super.getFieldList());
             Iterator<Field> fieldIterator = fields.iterator();
             while (fieldIterator.hasNext()) {
                 Field field = fieldIterator.next();
@@ -3447,26 +3447,23 @@ public interface WinNT extends WinError, WinDef, WinBase, BaseTSD {
 
         /**
          * <p>
-         * Upcoming value of this enum added for forward compatibility. Documentation
-         * will be added when available.
+         * The specified logical processors share a single processor die.
          * </p>
          */
         int RelationProcessorDie = 5;
 
         /**
          * <p>
-         * Introduced in TBD - Release Iron. Requests that the full affinity be
-         * returned. Unlike the other relation types, RelationNumaNodeEx is not used on
-         * input. It is simply a request for RelationNumaNode with full group
-         * information.
+         * Introduced in Windows Server 2022 (21H2, build 20348). Requests that the full affinity be returned. Unlike
+         * the other relation types, RelationNumaNodeEx is not used on input. It is simply a request for
+         * RelationNumaNode with full group information.
          * </p>
          */
         int RelationNumaNodeEx = 6;
 
         /**
          * <p>
-         * Upcoming value of this enum added for forward compatibility. Documentation
-         * will be added when available.
+         * The specified logical processors share a single processor module.
          * </p>
          */
         int RelationProcessorModule = 7;
@@ -4415,4 +4412,12 @@ public interface WinNT extends WinError, WinDef, WinBase, BaseTSD {
 
     public int EVENT_MODIFY_STATE = 0x0002;
     public int EVENT_ALL_ACCESS = (STANDARD_RIGHTS_REQUIRED | SYNCHRONIZE | 0x3);
+
+    /**
+     * The TOKEN_ELEVATION structure indicates whether a token has elevated privileges.
+     */
+    @FieldOrder({ "TokenIsElevated" })
+    class TOKEN_ELEVATION extends Structure {
+        public int TokenIsElevated;
+    }
 }

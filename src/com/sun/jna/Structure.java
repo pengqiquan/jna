@@ -48,6 +48,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.WeakHashMap;
+import java.util.concurrent.locks.ReentrantReadWriteLock;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -155,8 +156,14 @@ public abstract class Structure {
     //public static final int ALIGN_8 = 6;
 
     protected static final int CALCULATE_SIZE = -1;
-    static final Map<Class<?>, LayoutInfo> layoutInfo = new WeakHashMap<Class<?>, LayoutInfo>();
-    static final Map<Class<?>, List<String>> fieldOrder = new WeakHashMap<Class<?>, List<String>>();
+    static final ReentrantReadWriteLock layoutInfoLock = new ReentrantReadWriteLock();
+    static final ReentrantReadWriteLock fieldOrderLock = new ReentrantReadWriteLock();
+    static final ReentrantReadWriteLock fieldListLock = new ReentrantReadWriteLock();
+    static final ReentrantReadWriteLock validationLock = new ReentrantReadWriteLock();
+    static final Map<Class<?>, LayoutInfo> layoutInfo = new WeakHashMap<>();
+    static final Map<Class<?>, List<String>> fieldOrder = new WeakHashMap<>();
+    static final Map<Class<?>, List<Field>> fieldList = new WeakHashMap<>();
+    static final Map<Class<?>, Boolean> validationMap = new WeakHashMap<>();
 
     // This field is accessed by native code
     private Pointer memory;
@@ -168,7 +175,7 @@ public abstract class Structure {
     private Map<String, StructField> structFields;
     // Keep track of native C strings which have been allocated,
     // corresponding to String fields of this Structure
-    private final Map<String, NativeStringTracking> nativeStrings = new HashMap<String, NativeStringTracking>(8);
+    private final Map<String, NativeStringTracking> nativeStrings = new HashMap<>(8);
     private TypeMapper typeMapper;
     // This field is accessed by native code
     private long typeInfo;
@@ -479,7 +486,7 @@ public abstract class Structure {
     private static final ThreadLocal<Map<Pointer, Structure>> reads = new ThreadLocal<Map<Pointer, Structure>>() {
         @Override
         protected synchronized Map<Pointer, Structure> initialValue() {
-            return new HashMap<Pointer, Structure>();
+            return new HashMap<>();
         }
     };
 
@@ -981,7 +988,7 @@ public abstract class Structure {
      */
     // TODO(idosu 28 Apr 2018): Maybe deprecate this method to let users know they should use @FieldOrder
     protected List<String> getFieldOrder() {
-        List<String> fields = new LinkedList<String>();
+        List<String> fields = new LinkedList<>();
         for (Class<?> clazz = getClass(); clazz != Structure.class; clazz = clazz.getSuperclass()) {
             FieldOrder order = clazz.getAnnotation(FieldOrder.class);
             if (order != null) {
@@ -1015,22 +1022,43 @@ public abstract class Structure {
      * this {@link Structure} class.
      */
     protected List<Field> getFieldList() {
-        List<Field> flist = new ArrayList<Field>();
-        for (Class<?> cls = getClass();
-             !cls.equals(Structure.class);
-             cls = cls.getSuperclass()) {
-            List<Field> classFields = new ArrayList<Field>();
-            Field[] fields = cls.getDeclaredFields();
-            for (int i=0;i < fields.length;i++) {
-                int modifiers = fields[i].getModifiers();
-                if (Modifier.isStatic(modifiers) || !Modifier.isPublic(modifiers)) {
-                    continue;
-                }
-                classFields.add(fields[i]);
+        Class<?> clazz = getClass();
+        // Try to read the value under the read lock
+        fieldListLock.readLock().lock();
+        try {
+            List<Field> fields = fieldList.get(clazz);
+            if (fields != null) {
+                return fields; // Return the cached result if found
             }
-            flist.addAll(0, classFields);
+        } finally {
+            fieldListLock.readLock().unlock();
         }
-        return flist;
+
+        // If not found, compute the value under the write lock
+        fieldListLock.writeLock().lock();
+        try {
+            // Double-check if another thread has computed the value before we do
+            return fieldList.computeIfAbsent(clazz, (c) -> {
+                List<Field> flist = new ArrayList<>();
+                List<Field> classFields = new ArrayList<>();
+                for (Class<?> cls = clazz;
+                     !cls.equals(Structure.class);
+                     cls = cls.getSuperclass()) {
+                    for (Field field : cls.getDeclaredFields()) {
+                        int modifiers = field.getModifiers();
+                        if (Modifier.isStatic(modifiers) || !Modifier.isPublic(modifiers)) {
+                            continue;
+                        }
+                        classFields.add(field);
+                    }
+                    flist.addAll(0, classFields);
+                    classFields.clear();
+                }
+                return flist;
+            });
+        } finally {
+            fieldListLock.writeLock().unlock();
+        }
     }
 
     /** Cache field order per-class.
@@ -1038,13 +1066,24 @@ public abstract class Structure {
      */
     private List<String> fieldOrder() {
         Class<?> clazz = getClass();
-        synchronized(fieldOrder) {
-            List<String> list = fieldOrder.get(clazz);
-            if (list == null) {
-                list = getFieldOrder();
-                fieldOrder.put(clazz, list);
+        // Try to read the value under the read lock
+        fieldOrderLock.readLock().lock();
+        try {
+            List<String> order = fieldOrder.get(clazz);
+            if (order != null) {
+                return order; // Return the cached result if found
             }
-            return list;
+        } finally {
+            fieldOrderLock.readLock().unlock();
+        }
+
+        // If not found, compute the value under the write lock
+        fieldOrderLock.writeLock().lock();
+        try {
+            // Double-check if another thread has computed the value before we do (see JavaDoc)
+            return fieldOrder.computeIfAbsent(clazz, (c) -> getFieldOrder());
+        } finally {
+            fieldOrderLock.writeLock().unlock();
         }
     }
 
@@ -1053,7 +1092,7 @@ public abstract class Structure {
     }
 
     public static List<String> createFieldsOrder(List<String> baseFields, List<String> extraFields) {
-        List<String> fields = new ArrayList<String>(baseFields.size() + extraFields.size());
+        List<String> fields = new ArrayList<>(baseFields.size() + extraFields.size());
         fields.addAll(baseFields);
         fields.addAll(extraFields);
         return Collections.unmodifiableList(fields);
@@ -1076,7 +1115,7 @@ public abstract class Structure {
     }
 
     private static <T extends Comparable<T>> List<T> sort(Collection<? extends T> c) {
-        List<T> list = new ArrayList<T>(c);
+        List<T> list = new ArrayList<>(c);
         Collections.sort(list);
         return list;
     }
@@ -1090,7 +1129,7 @@ public abstract class Structure {
     **/
     protected List<Field> getFields(boolean force) {
         List<Field> flist = getFieldList();
-        Set<String> names = new HashSet<String>();
+        Set<String> names = new HashSet<>();
         for (Field f : flist) {
             names.add(f.getName());
         }
@@ -1113,7 +1152,7 @@ public abstract class Structure {
             return null;
         }
 
-        Set<String> orderedNames = new HashSet<String>(fieldOrder);
+        Set<String> orderedNames = new HashSet<>(fieldOrder);
         if (!orderedNames.equals(names)) {
             throw new Error("Structure.getFieldOrder() on " + getClass()
                             + " returns names ("
@@ -1159,8 +1198,11 @@ public abstract class Structure {
      */
     static <T extends Structure> int size(Class<T> type, T value) {
         LayoutInfo info;
-        synchronized(layoutInfo) {
+        layoutInfoLock.readLock().lock();
+        try {
             info = layoutInfo.get(type);
+        } finally {
+            layoutInfoLock.readLock().unlock();
         }
         int sz = (info != null && !info.variable) ? info.size : CALCULATE_SIZE;
         if (sz == CALCULATE_SIZE) {
@@ -1183,8 +1225,11 @@ public abstract class Structure {
         int size = CALCULATE_SIZE;
         Class<?> clazz = getClass();
         LayoutInfo info;
-        synchronized(layoutInfo) {
+        layoutInfoLock.readLock().lock();
+        try {
             info = layoutInfo.get(clazz);
+        } finally {
+            layoutInfoLock.readLock().unlock();
         }
         if (info == null
             || this.alignType != info.alignType
@@ -1196,7 +1241,8 @@ public abstract class Structure {
             this.structFields = info.fields;
 
             if (!info.variable) {
-                synchronized(layoutInfo) {
+                layoutInfoLock.readLock().lock();
+                try {
                     // If we've already cached it, only override layout if
                     // we're using non-default values for alignment and/or
                     // type mapper; this way we don't override the cache
@@ -1205,8 +1251,18 @@ public abstract class Structure {
                     if (!layoutInfo.containsKey(clazz)
                         || this.alignType != ALIGN_DEFAULT
                         || this.typeMapper != null) {
+                        // Must release read lock before acquiring write lock (see JavaDoc lock escalation example)
+                        layoutInfoLock.readLock().unlock();
+                        layoutInfoLock.writeLock().lock();
+
                         layoutInfo.put(clazz, info);
+
+                        // Downgrade by acquiring read lock before releasing write lock (again, see JavaDoc)
+                        layoutInfoLock.readLock().lock();
+                        layoutInfoLock.writeLock().unlock();;
                     }
+                } finally {
+                    layoutInfoLock.readLock().unlock();
                 }
             }
             size = info.size;
@@ -1250,9 +1306,28 @@ public abstract class Structure {
 
     /** ensure all fields are of valid type. */
     private void validateFields() {
-        List<Field> fields = getFieldList();
-        for (Field f : fields) {
-            validateField(f.getName(), f.getType());
+        // Try to read the value under the read lock
+        validationLock.readLock().lock();
+        try {
+            if (validationMap.containsKey(getClass())) {
+                return; // Return because this Structure has already been validated
+            }
+        } finally {
+            validationLock.readLock().unlock();
+        }
+
+        // If not found, perform validation and update the cache under the write lock
+        validationLock.writeLock().lock();
+        try {
+            // Double-check if another thread has computed the value before we do (see JavaDoc)
+            validationMap.computeIfAbsent(getClass(), (cls) -> {
+                for (Field f : getFieldList()) {
+                    validateField(f.getName(), f.getType());
+                }
+                return true;
+            });
+        } finally {
+            validationLock.writeLock().unlock();
         }
     }
 
@@ -1563,7 +1638,7 @@ public abstract class Structure {
 
     private String toString(int indent, boolean showContents, boolean dumpMemory) {
         ensureAllocated();
-        String LS = System.getProperty("line.separator");
+        String LS = System.lineSeparator();
         String name = format(getClass()) + "(" + getPointer() + ")";
         if (!(getPointer() instanceof Memory)) {
             name += " (" + size() + " bytes)";
@@ -1955,9 +2030,9 @@ public abstract class Structure {
             public size_t(long value) { super(Native.SIZE_T_SIZE, value); }
         }
 
-        private static final Map<Class, Map<Integer,FFIType>> typeInfoMap = new WeakHashMap<Class, Map<Integer,FFIType>>();
-        private static final Map<Class, FFIType> unionHelper = new WeakHashMap<Class, FFIType>();
-        private static final Map<Pointer, FFIType> ffiTypeInfo = new HashMap<Pointer, FFIType>();
+        private static final Map<Class, Map<Integer,FFIType>> typeInfoMap = new WeakHashMap<>();
+        private static final Map<Class, FFIType> unionHelper = new WeakHashMap<>();
+        private static final Map<Pointer, FFIType> ffiTypeInfo = new HashMap<>();
 
         // Native.initIDs initializes these fields to their appropriate
         // pointer values.  These are in a separate class from FFIType so that
@@ -2206,7 +2281,7 @@ public abstract class Structure {
             synchronized (typeInfoMap) {
                 Map<Integer,FFIType> typeMap = typeInfoMap.get(clazz);
                 if(typeMap == null) {
-                    typeMap = new HashMap<Integer,FFIType>();
+                    typeMap = new HashMap<>();
                     typeInfoMap.put(clazz, typeMap);
                 }
                 typeMap.put(elementCount, type);
@@ -2325,9 +2400,7 @@ public abstract class Structure {
         try {
             cls.getConstructor();
             return;
-        }catch(NoSuchMethodException e) {
-        }
-        catch(SecurityException e) {
+        }catch(NoSuchMethodException | SecurityException e) {
         }
         throw new IllegalArgumentException("No suitable constructor found for class: " + cls.getName());
     }

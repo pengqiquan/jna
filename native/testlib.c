@@ -31,6 +31,8 @@ extern "C" {
 #include <stdio.h>
 #include <stdarg.h>
 #include <stdlib.h>
+#include <string.h>
+
 #if !defined(_WIN32_WCE)
 #include <errno.h>
 #endif
@@ -906,6 +908,20 @@ addVarArgs(const char *fmt, ...) {
   return sum;
 }
 
+EXPORT int32_t
+addSeveralFixedArgsAndVarArgs(int a, int b, int c, int d, int n_varargs, ...) {
+  va_list ap;
+  int i;
+  int32_t sum = a + b + c + d;
+  va_start(ap, n_varargs);
+
+  for (i = 0; i < n_varargs; i++) {
+    sum += va_arg(ap, int32_t);
+  }
+  va_end(ap);
+  return sum;
+}
+
 EXPORT void
 modifyStructureVarArgs(const char* fmt, ...) {
   struct _ss {
@@ -1076,6 +1092,36 @@ returnLastElementOfComponentsDSDAL(DemoStructureDifferentArrayLengths ts, int de
     printf("DemoStructureDifferentArrayLengths.t3[4]: %1.3f\n", result.t3[4]);
   }
   return result;
+}
+
+/**
+ * Copy the input char array to the output char array. The caller is responsible
+ * to allocate a correctly sized buffer.
+ */
+EXPORT size_t copyString(char* input, char* output) {
+    size_t len = strlen(input) + 1;
+    memcpy(output, input, len);
+    return len;
+}
+
+/**
+ * Copy the input array of char arrays to the output char array. The caller is
+ * responsible to allocate a correctly sized buffer.
+ */
+EXPORT size_t copyStringArray(char** input, char* output) {
+    int i;
+    size_t len = 0;
+    for(i = 0;; i++) {
+        char* currInput = input[i];
+        if(currInput == NULL) {
+            break;
+        }
+        size_t localLen = strlen(currInput) + 1;
+        memcpy(output, currInput, localLen);
+        output += localLen;
+        len += localLen;
+    }
+    return len;
 }
 
 #ifdef __cplusplus

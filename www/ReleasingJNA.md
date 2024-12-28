@@ -16,7 +16,9 @@ JNA Release Process
 
 * Run `ant -Drelease=true -Dmaven-release=true clean dist stage`
 
-* Commit and push generated files in `dist`, `pom-*.xml`, `CHANGES.md`, `README.md` and `src/com/sun/jna/Version.java`.
+* Commit and push generated files in `dist`, `CHANGES.md` and `README.md`.
+
+* Login to https://oss.sonatype.org and release the maven artifacts
 
 * Tag
   * Tag using the new version number (e.g. `git tag 4.2.1`)
@@ -29,8 +31,8 @@ JNA Release Process
 
 * Email release notice to [jna-users Google group](http://groups.google.com/group/jna-users).
 
-* Increment the version in build.xml for the next development iteration
-  * Increment "jna.revision" in build.xml by one
+* Increment the version in common.xml for the next development iteration
+  * Increment "jna.minor" in common.xml by one
   * Create a new section in CHANGES.md for 'Next Release (x.y.z)'
   * Commit and push
 
